@@ -1,0 +1,49 @@
+// @version=4
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © AlgoSoft
+strategy("AlgoSight Strategy", shorttitle = "ASV1_Strat",overlay=true, margin_long=100, margin_short=100,default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+//Stoploss and Profits Inputs
+stoploss_input=input(1.0,title="Stop Loss %", type=input.float, minval=1.0)/100
+takeprofit_input=input(2.0,title="Take Profit %", type=input.float, minval=1.0)/100
+enable=input(false,title="Enable Stoploss and Profit?")
+
+stoploss_level = strategy.position_avg_price * (1 - stoploss_input)
+takeprofit_level = strategy.position_avg_price * (1 + takeprofit_input)
+plot(enable and stoploss_input and stoploss_level ? stoploss_level : na, color=color.red)
+plot(enable and stoploss_input and takeprofit_level ? takeprofit_level : na, color=color.green)
+
+//RSI Inputs
+RSIOverSold = input(30, minval=1, title="RSI Over Sold Level")
+RSIOverBought = input(70, minval=1, title="RSI Over Bought Level")
+src = close
+len = input(14, minval=1, title="RSI Line Length")
+up = rma(max(change(src), 0), len)
+down = rma(-min(change(src), 0), len)
+rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - 100 / (1 + up / down)
+wasOversold = rsi[0] <= RSIOverSold or rsi[1] <= RSIOverSold or rsi[2] <= RSIOverSold or rsi[3] <= RSIOverSold or rsi[4] <= RSIOverSold or rsi[5] <= RSIOverSold
+wasOverbought = rsi[0] >= RSIOverBought or rsi[1] >= RSIOverBought or rsi[2] >= RSIOverBought or rsi[3] >= RSIOverBought or rsi[4] >= RSIOverBought or rsi[5] >= RSIOverBought
+
+
+// MACD INPUTS
+FastMA = input(title="MACD FastMA", type=input.integer, defval=12)
+SlowMA = input(title="MACD SlowMA", type=input.integer, defval=26)
+Signal = input(title="MACD Signal Line", type=input.integer, minval = 1, maxval = 50, defval = 9)
+Source = input(title="Source", type=input.source, defval=close)
+[currMacd, _, _] = macd(close[0], FastMA, SlowMA, Signal)
+signal = ema(currMacd, 9)
+avg_1 = avg(currMacd, signal)
+crossoverBear = cross(currMacd, signal) and currMacd < signal ? avg_1 : na
+avg_2 = avg(currMacd, signal)
+crossoverBull = cross(currMacd, signal) and currMacd > signal ? avg_2 : na
+
+// Strategy Long
+strategy.risk.allow_entry_in(strategy.direction.long)
+Long = wasOversold and crossoverBull
+LongCondition1 = wasOverbought and crossoverBear
+LongCondition2 = crossunder(FastMA, SlowMA) and avg_1 > .1
+ExitLongCondition = wasOverbought and crossoverBear
+
+strategy.entry("Long", strategy.long, when=Long)
+strategy.close("Long", when=LongCondition1)
+strategy.exit("Stop Loss/TP", "Long", when=enable, loss=stoploss_level, limit=takeprofit_level)
